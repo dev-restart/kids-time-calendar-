@@ -15,15 +15,13 @@
 	// Numbers on the clock face
 	const numbers = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
-	function getAngle(event: MouseEvent | TouchEvent) {
+	function getAngle(event: PointerEvent) {
 		const rect = svgElement.getBoundingClientRect();
 		const cx = rect.left + rect.width / 2;
 		const cy = rect.top + rect.height / 2;
 
-		const clientX =
-			"touches" in event ? event.touches[0].clientX : event.clientX;
-		const clientY =
-			"touches" in event ? event.touches[0].clientY : event.clientY;
+		const clientX = event.clientX;
+		const clientY = event.clientY;
 
 		const dx = clientX - cx;
 		const dy = clientY - cy;
@@ -43,31 +41,50 @@
 		return theta;
 	}
 
-	function handleStart(
-		hand: "hour" | "minute",
-		event: MouseEvent | TouchEvent,
-	) {
+	function handleStart(hand: "hour" | "minute", event: PointerEvent) {
+		// Prevent default browser behavior (scrolling) immediatley
+		event.preventDefault();
+
+		// *** BODY SCROLL LOCK ***
+		// Freeze the entire page to prevent ANY scrolling during drag
+		document.body.style.overflow = "hidden";
+
+		// Lock the pointer to the target element
+		(event.target as Element).setPointerCapture(event.pointerId);
+
 		isDragging = hand;
-		event.preventDefault(); // Prevent scroll on touch
+		updateTime(event);
 	}
 
-	function handleMove(event: MouseEvent | TouchEvent) {
+	function handleMove(event: PointerEvent) {
+		if (!isDragging) return;
+		event.preventDefault();
+		updateTime(event);
+	}
+
+	function handleEnd(event: PointerEvent) {
 		if (!isDragging) return;
 
-		const angle = getAngle(event);
+		// *** BODY SCROLL UNLOCK ***
+		document.body.style.overflow = "";
 
+		// Release capture
+		if (
+			event.target instanceof Element &&
+			event.target.hasPointerCapture(event.pointerId)
+		) {
+			event.target.releasePointerCapture(event.pointerId);
+		}
+
+		isDragging = null;
+	}
+
+	function updateTime(event: PointerEvent) {
+		const angle = getAngle(event);
 		if (isDragging === "minute") {
 			// Snap to nearest minute (6 degrees)
 			const snappedAngle = Math.round(angle / 6) * 6;
 			const newMinute = (snappedAngle / 6) % 60;
-
-			// We need to be smart about day changes or hour changes if we validly wrap around
-			// But for MVP direct interaction: calculate diff or just set absolute minutes?
-			// Let's rely on timeStore maintaining totalMinutes.
-
-			// Simple approach: Update totalMinutes closest to current, matching the new minute.
-			// This might be tricky with wrapping.
-			// Alternative: Calculate the minimal delta from current angle to new angle and apply it.
 
 			let currentMinuteAngle = timeStore.minutes * 6;
 			let delta = snappedAngle - (currentMinuteAngle % 360);
@@ -83,12 +100,7 @@
 				timeStore.addMinutes(minuteDelta);
 			}
 		} else if (isDragging === "hour") {
-			// Dragging hour hand is roughly setting hours.
-			// Usually hour hand shouldn't be dragged independently in real clocks, but for learning?
-			// Let's allow it, but maybe just changing hours not minutes?
-			// Or maybe exact angle mapping?
-			// Let's map 30 degrees = 1 hour (60 minutes)
-
+			// Dragging hour hand
 			let currentHourAngle =
 				(timeStore.hours % 12) * 30 + timeStore.minutes * 0.5; // Mod 360 effectively
 			let delta = angle - (currentHourAngle % 360);
@@ -100,10 +112,6 @@
 				timeStore.addMinutes(minuteDelta);
 			}
 		}
-	}
-
-	function handleEnd() {
-		isDragging = null;
 	}
 
 	// Drop Zone Handlers
@@ -137,12 +145,7 @@
 	}
 </script>
 
-<svelte:window
-	onmousemove={handleMove}
-	onmouseup={handleEnd}
-	ontouchmove={handleMove}
-	ontouchend={handleEnd}
-/>
+<svelte:window />
 
 <div
 	class="relative flex items-center justify-center select-none transition-transform duration-200 {isDragOver
@@ -157,8 +160,10 @@
 >
 	<svg
 		bind:this={svgElement}
+		id="clock-drop-zone"
 		viewBox="0 0 300 300"
 		class="w-full h-full drop-shadow-2xl pointer-events-auto"
+		style="touch-action: none;"
 	>
 		<!-- Defs for Gradients -->
 		<defs>
@@ -224,7 +229,7 @@
 		{/each}
 
 		<!-- Numbers -->
-		{#each [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as hour, i}
+		{#each numbers as hour, i}
 			<text
 				x={150 + 105 * Math.sin(((i + 1) * Math.PI) / 6)}
 				y={150 - 105 * Math.cos(((i + 1) * Math.PI) / 6)}
@@ -244,7 +249,7 @@
 				x1="150"
 				y1="150"
 				x2="150"
-				y2="70"
+				y2="50"
 				stroke="var(--color-time-hour)"
 				stroke-width="12"
 				stroke-linecap="round"
@@ -256,10 +261,13 @@
 				x2="150"
 				y2="50"
 				stroke="transparent"
-				stroke-width="40"
+				stroke-width="60"
 				class="cursor-grab active:cursor-grabbing pointer-events-auto"
-				onmousedown={(e) => handleStart("hour", e)}
-				ontouchstart={(e) => handleStart("hour", e)}
+				style="touch-action: none;"
+				onpointerdown={(e) => handleStart("hour", e)}
+				onpointermove={handleMove}
+				onpointerup={handleEnd}
+				onpointercancel={handleEnd}
 				role="button"
 				aria-label="Drag Hour Hand"
 				tabindex="0"
@@ -285,10 +293,13 @@
 				x2="150"
 				y2="20"
 				stroke="transparent"
-				stroke-width="30"
+				stroke-width="50"
 				class="cursor-grab active:cursor-grabbing pointer-events-auto"
-				onmousedown={(e) => handleStart("minute", e)}
-				ontouchstart={(e) => handleStart("minute", e)}
+				style="touch-action: none;"
+				onpointerdown={(e) => handleStart("minute", e)}
+				onpointermove={handleMove}
+				onpointerup={handleEnd}
+				onpointercancel={handleEnd}
 				role="button"
 				aria-label="Drag Minute Hand"
 				tabindex="0"
