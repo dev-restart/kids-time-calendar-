@@ -98,7 +98,7 @@
             <!-- Optional: Show current simulation day context -->
             {#if simulationDate.getMonth() === displayDate.getMonth()}
                 <p class="text-xs text-blue-600 font-bold">
-                    Time travel: {simulationDate.getDate()}일
+                    시간여행 {simulationDate.getDate()}일
                 </p>
             {/if}
         </div>

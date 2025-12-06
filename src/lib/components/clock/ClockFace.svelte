@@ -42,15 +42,12 @@
 	}
 
 	function handleStart(hand: "hour" | "minute", event: PointerEvent) {
-		// Prevent default browser behavior (scrolling) immediatley
 		event.preventDefault();
-
-		// *** BODY SCROLL LOCK ***
-		// Freeze the entire page to prevent ANY scrolling during drag
+		event.stopPropagation();
+		
+		// Lock pointer to SVG element (stable, doesn't re-render)
+		svgElement.setPointerCapture(event.pointerId);
 		document.body.style.overflow = "hidden";
-
-		// Lock the pointer to the target element
-		(event.target as Element).setPointerCapture(event.pointerId);
 
 		isDragging = hand;
 		updateTime(event);
@@ -65,15 +62,10 @@
 	function handleEnd(event: PointerEvent) {
 		if (!isDragging) return;
 
-		// *** BODY SCROLL UNLOCK ***
 		document.body.style.overflow = "";
 
-		// Release capture
-		if (
-			event.target instanceof Element &&
-			event.target.hasPointerCapture(event.pointerId)
-		) {
-			event.target.releasePointerCapture(event.pointerId);
+		if (svgElement.hasPointerCapture(event.pointerId)) {
+			svgElement.releasePointerCapture(event.pointerId);
 		}
 
 		isDragging = null;
@@ -145,8 +137,6 @@
 	}
 </script>
 
-<svelte:window />
-
 <div
 	class="relative flex items-center justify-center select-none transition-transform duration-200 {isDragOver
 		? 'scale-110'
@@ -164,6 +154,9 @@
 		viewBox="0 0 300 300"
 		class="w-full h-full drop-shadow-2xl pointer-events-auto"
 		style="touch-action: none;"
+		onpointermove={handleMove}
+		onpointerup={handleEnd}
+		onpointercancel={handleEnd}
 	>
 		<!-- Defs for Gradients -->
 		<defs>
@@ -231,8 +224,8 @@
 		<!-- Numbers -->
 		{#each numbers as hour, i}
 			<text
-				x={150 + 105 * Math.sin(((i + 1) * Math.PI) / 6)}
-				y={150 - 105 * Math.cos(((i + 1) * Math.PI) / 6)}
+				x={150 + 105 * Math.sin((i * Math.PI) / 6)}
+				y={150 - 105 * Math.cos((i * Math.PI) / 6)}
 				text-anchor="middle"
 				dominant-baseline="middle"
 				class="text-3xl font-jua fill-slate-600 font-bold select-none pointer-events-none"
@@ -263,11 +256,7 @@
 				stroke="transparent"
 				stroke-width="60"
 				class="cursor-grab active:cursor-grabbing pointer-events-auto"
-				style="touch-action: none;"
 				onpointerdown={(e) => handleStart("hour", e)}
-				onpointermove={handleMove}
-				onpointerup={handleEnd}
-				onpointercancel={handleEnd}
 				role="button"
 				aria-label="Drag Hour Hand"
 				tabindex="0"
@@ -295,11 +284,7 @@
 				stroke="transparent"
 				stroke-width="50"
 				class="cursor-grab active:cursor-grabbing pointer-events-auto"
-				style="touch-action: none;"
 				onpointerdown={(e) => handleStart("minute", e)}
-				onpointermove={handleMove}
-				onpointerup={handleEnd}
-				onpointercancel={handleEnd}
 				role="button"
 				aria-label="Drag Minute Hand"
 				tabindex="0"

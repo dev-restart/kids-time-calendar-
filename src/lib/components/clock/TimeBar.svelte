@@ -9,14 +9,11 @@
         ((timeStore.minutes + timeStore.hours * 60) / 1440) * 100,
     );
 
-    function updateTimeFromEvent(event: MouseEvent | TouchEvent) {
+    function updateTimeFromEvent(event: PointerEvent) {
         if (!barElement) return;
 
         const rect = barElement.getBoundingClientRect();
-        const clientX =
-            "touches" in event ? event.touches[0].clientX : event.clientX;
-
-        let offsetX = clientX - rect.left;
+        let offsetX = event.clientX - rect.left;
 
         // Clamp width
         if (offsetX < 0) offsetX = 0;
@@ -28,29 +25,32 @@
         timeStore.setDayMinutes(totalMinutes);
     }
 
-    function handleStart(event: MouseEvent | TouchEvent) {
+    function handleStart(event: PointerEvent) {
+        event.preventDefault();
+        (event.target as Element).setPointerCapture(event.pointerId);
+        document.body.style.overflow = "hidden";
         isDragging = true;
         updateTimeFromEvent(event);
-        // prevent default text selection
-        if (event.type === "mousedown") event.preventDefault();
     }
 
-    function handleMove(event: MouseEvent | TouchEvent) {
+    function handleMove(event: PointerEvent) {
         if (!isDragging) return;
+        event.preventDefault();
         updateTimeFromEvent(event);
     }
 
-    function handleEnd() {
+    function handleEnd(event: PointerEvent) {
+        if (!isDragging) return;
+        document.body.style.overflow = "";
+        if (
+            event.target instanceof Element &&
+            event.target.hasPointerCapture(event.pointerId)
+        ) {
+            event.target.releasePointerCapture(event.pointerId);
+        }
         isDragging = false;
     }
 </script>
-
-<svelte:window
-    onmousemove={handleMove}
-    onmouseup={handleEnd}
-    ontouchmove={handleMove}
-    ontouchend={handleEnd}
-/>
 
 <div class="w-full px-4 py-6 select-none">
     <div class="relative h-12">
@@ -58,8 +58,17 @@
         <div
             bind:this={barElement}
             class="relative w-full h-full bg-slate-200 rounded-full overflow-hidden cursor-pointer shadow-inner border-2 border-slate-300"
-            onmousedown={handleStart}
-            ontouchstart={handleStart}
+            style="touch-action: none;"
+            role="slider"
+            aria-label="Time slider"
+            aria-valuenow={timeStore.hours * 60 + timeStore.minutes}
+            aria-valuemin={0}
+            aria-valuemax={1440}
+            tabindex="0"
+            onpointerdown={handleStart}
+            onpointermove={handleMove}
+            onpointerup={handleEnd}
+            onpointercancel={handleEnd}
         >
             <!-- Day/Night Indicators (Background) -->
             <!-- Night: 0-6h (0-25%), Day: 6-18h (25-75%), Night: 18-24h (75-100%) -->
